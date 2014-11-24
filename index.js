@@ -3,7 +3,6 @@
  */
 var Module = require('module');
 var original = Module._load;
-var debug = require('debug')('newrelicbuster');
 
 //Patch #1: The module loader, just like NewRelic does.
 Module._load = function buster(file) {
