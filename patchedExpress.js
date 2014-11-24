@@ -1,5 +1,5 @@
 'use strict'
-console.log('hi');
+console.error('Hi. I\'m a monkey-patched version of New Relic. Handle with care!');
 var shimmer = require('../newrelic/lib/shimmer.js')
 var urltils = require('../newrelic/lib//util/urltils.js')
 var logger = require('../newrelic/lib/logger.js').child({component : 'express'})

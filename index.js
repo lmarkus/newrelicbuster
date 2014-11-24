@@ -13,9 +13,7 @@ Module._load = function buster(file) {
     if (typeof file === 'string' && file.indexOf('/instrumentation/express.js') >= 0) {
 
         var nrExpress = original.apply(this, arguments);
-        for(var i = 0 ; i < arguments.length;i++){
-            console.log(arguments[i]);
-        }
+
 
         arguments[0]='./patchedExpress.js';
         var patch = original.apply(this,arguments);
