@@ -34,7 +34,7 @@ This patch works it's way down NewRelic's code to modify the above function to u
 ```javascript
  
          var i = app.stack.length -1;
-         for (;i>0;i--){
+         for (; i>=0; i--){
              if(app.stack[i]===interceptor) {
                  app.stack.splice(i,1);
              }

@@ -405,10 +405,10 @@ module.exports = function initialize(agent, express) {
         if (app.stack && app.stack.length) {
             // Remove our custom error handler.
 
-            var i = app.stack.length -1;
-            for (;i>0;i--){
-                if(app.stack[i]===interceptor) {
-                    app.stack.splice(i,1);
+            var i = app.stack.length - 1;
+            for (; i >= 0; i--) {
+                if (app.stack[i] === interceptor) {
+                    app.stack.splice(i, 1);
                 }
             }
         }
