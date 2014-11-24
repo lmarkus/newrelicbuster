@@ -1,6 +1,6 @@
 {
   "name": "newrelicbuster",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A monkey patch to enable New Relic to run on Kraken applications.",
   "main": "index.js",
   "scripts": {
