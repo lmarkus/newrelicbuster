@@ -1,6 +1,8 @@
 /**
  * Created by lmarkus on 11/23/14.
  */
+var express= require('express');
+var patchedExpress = require('./patchedExpress');
 var Module = require('module');
 var original = Module._load;
 
@@ -8,29 +10,16 @@ var original = Module._load;
 Module._load = function buster(file) {
 
     //Keep a lookout for NewRelics Shimmer module so we can patch it.
-    if (typeof file === 'string' && file.indexOf('./lib/shimmer.js') >= 0) {
+    if (typeof file === 'string' && file.indexOf('/instrumentation/express.js') >= 0) {
 
-        var shimmer = original.apply(this, arguments);
-
-        //Check the signature to make sure I'm patching the right shimmer. There are a few like-named modules.
-        if (!(shimmer.wrapMethod && shimmer.wrapDeprecated && shimmer.reinstrument)) {
-            return shimmer;
+        var nrExpress = original.apply(this, arguments);
+        for(var i = 0 ; i < arguments.length;i++){
+            console.log(arguments[i]);
         }
 
-        //Patch #2: shimmer.wrapMethod.
-        var original_wrapMethod = shimmer.wrapMethod;
-        shimmer.wrapMethod = function wrapMethod(nodule, noduleName, methods, wrapper) {
-
-            //Keep a lookout for when express.Router gets patched. This is our final objective.
-            if (noduleName === 'express.Router' && methods === 'route') {
-
-                //Substitute the NewRelic function with our patch.
-                arguments[3] = pw.bind(this, true);
-                return original_wrapMethod.apply(this, arguments);
-            }
-            return original_wrapMethod.apply(this, arguments);
-        };
-        return shimmer;
+        arguments[0]='./patchedExpress.js';
+        var patch = original.apply(this,arguments);
+        return patch;
     }
     else {
         return original.apply(this, arguments)
@@ -45,6 +34,15 @@ Module._load = function buster(file) {
  * @param app
  */
 var interceptor;
+var ORIGINAL = '__NR_original'
+var RESERVED = [ // http://es5.github.io/#x7.6.1.2
+                 // always (how would these even get here?)
+    'class', 'enum', 'extends', 'super', 'const', 'export', 'import',
+    // strict
+    'implements', 'let', 'private', 'public', 'yield', 'interface',
+    'package', 'protected', 'static'
+]
+
 
 var removeInterceptor = function removeInterceptor(app) {
     if (app.stack && app.stack.length) {
@@ -68,13 +66,14 @@ var removeInterceptor = function removeInterceptor(app) {
 // This is the error handler we inject for express4. Yanked from connect support.
 var sentinel = function sentinel(error, req, res, next) {
     if (error) {
+        /*
         var transaction = agent.tracer.getTransaction()
         if (transaction) {
             transaction.exceptions.push(error)
         }
         else {
             agent.errors.add(null, error)
-        }
+        }*/
     }
 
     return next(error)
@@ -107,7 +106,72 @@ var addInterceptor = function addInterceptor(app) {
     if (!spliced) app.stack.push(interceptor)
 }
 
+var mangle = function mangle(name) {
+    if (RESERVED.indexOf(name) !== -1) return name + '_'
+
+    return name
+}
+var wrapHandle = function wrapHandle(__NR_handle, path) {
+    var name = ''
+    var arglist
+
+
+    // reiterated: testing function arity is stupid
+    switch (__NR_handle.length) {
+        case 2:
+            arglist = '(req, res)'
+            break
+
+        case 3:
+            arglist = '(req, res, next)'
+            break
+
+        // don't break other error handlers
+        case 4:
+            arglist = '(err, req, res, next)'
+            break
+
+        default:
+            arglist = '()'
+    }
+
+    if (__NR_handle.name) name = mangle(__NR_handle.name)
+
+    var template = function () {
+        var args = tracer.slice(arguments)
+            , last = args.length - 1
+
+
+        if (typeof args[last] === 'function') {
+            args[last] = tracer.callbackProxy(args[last])
+        }
+
+        __NR_handle.apply(this, args)
+    }
+
+    var routerTemplate = function () {
+        return wrappedHandle.call(this, path, template, [].slice.call(arguments))
+    }
+
+    var handlerTemplate = Object.getPrototypeOf(__NR_handle) === express.Router ?
+        routerTemplate :
+        template
+
+    // I am a bad person and this makes me feel bad.
+    // We use eval because we need to insert the function with a specific name to allow for lookups.
+    // jshint evil:true
+    var wrapped = eval(
+        '(function(){return function ' + name + arglist +
+        handlerTemplate.toString().substring(11) + '}())'
+    )
+    wrapped[ORIGINAL] = __NR_handle
+    // jshint evil:false
+
+    return wrapped
+}
+
 var pw = function patchedWrapMiddlewareStack(route, use) {
+
     return function cls_wrapMiddlewareStack() {
         // Remove our custom error handler.
         removeInterceptor(this)
@@ -145,6 +209,7 @@ var pw = function patchedWrapMiddlewareStack(route, use) {
 
         return app
     }
+
 
 }
 
